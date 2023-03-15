@@ -16,25 +16,30 @@ import (
 var myApp fyne.App
 var userID string
 var username string
+var connection net.Conn
+
+type Message struct {
+	Sender  string
+	Request string
+	Content string
+}
 
 func connectToServer() bool {
-	connection, err := net.Dial("tcp", ":8080")
-	if err != nil {
-		fmt.Println(err)
-		return false
-	}
-	// defer connection.Close() //need opened connection for later actions
-
-	message := struct {
-		Request string
-		Content string
-	}{"register", username}
+	message := Message{userID, "register", username}
 
 	data, err := json.Marshal(message)
 	if err != nil {
 		fmt.Println(err)
 		return false
 	}
+
+	connection, err = net.Dial("tcp", ":8080")
+	if err != nil {
+		fmt.Println(err)
+		return false
+	}
+	// defer connection.Close() //need opened connection for later actions
+
 	_, err = connection.Write(data)
 	if err != nil {
 		fmt.Println(err)
@@ -55,24 +60,66 @@ func connectToServer() bool {
 }
 
 func initializeGameWindow() {
-	gameWindow := myApp.NewWindow("Tic-Tac-Toe")
-	gameWindow.Resize(fyne.NewSize(600, 600))
+	window := myApp.NewWindow("Tic-Tac-Toe")
+	window.Resize(fyne.NewSize(600, 600))
 
 	btnJoin := widget.NewButton("Join Room", func() {
 
 	})
 	btnCreate := widget.NewButton("Create Room", func() {
-		createRoom()
+		if createGameRoom() {
+			window.SetContent(widget.NewButton("GAME SESSION CREATED", nil))
+		}
 	})
 
 	content := container.NewCenter(container.NewVBox(btnJoin, btnCreate))
-	gameWindow.SetContent(content)
+	window.SetContent(content)
 
-	gameWindow.Show()
+	window.Show()
 }
 
-func createRoom() {
+func createGameRoom() bool {
+	//send request to server
 
+	fmt.Println(connection)
+
+	message := Message{userID, "createRoom", ""}
+
+	data, err := json.Marshal(message)
+	if err != nil {
+		fmt.Println(err)
+		return false
+	}
+	_, err = connection.Write(data)
+	if err != nil {
+		fmt.Println(err)
+		return false
+	}
+
+	//server sents back roomID, current players
+
+	data = make([]byte, 1024)
+	n, err := connection.Read(data)
+	if err != nil {
+		fmt.Println(err)
+		return false
+	}
+	data = data[:n]
+
+	session := struct {
+		RoomID  string
+		Players []string
+		Host    string
+	}{}
+
+	err = json.Unmarshal(data, &session)
+	if err != nil {
+		fmt.Println(err)
+		return false
+	}
+
+	fmt.Println(session)
+	return true
 }
 
 func main() {
