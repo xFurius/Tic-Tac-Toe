@@ -14,14 +14,23 @@ type user struct {
 }
 
 type Message struct {
+	Sender  string
 	Request string
 	Content string
 }
 
+type GameSession struct {
+	RoomID  string
+	Players []string
+	Host    string
+}
+
 var users map[string]user
+var activeSessions map[string]GameSession
 
 func main() {
 	users = make(map[string]user)
+	activeSessions = make(map[string]GameSession)
 	listener, err := net.Listen("tcp", ":8080")
 	if err != nil {
 		fmt.Println(err)
@@ -73,10 +82,36 @@ func handleConnection(conn net.Conn) {
 				fmt.Println(err)
 				return
 			}
+		case "createRoom":
+			fmt.Println("create room")
+			roomID, err := gonanoid.ID(6)
+			if err != nil {
+				fmt.Println(err)
+			}
+			fmt.Println(roomID)
+			session := GameSession{roomID, []string{}, t.Sender}
+
+			session.addUser(t.Sender)
+
+			data, err := json.Marshal(session)
+			if err != nil {
+				fmt.Println(err)
+			}
+
+			_, err = users[t.Sender].conn.Write(data)
+			if err != nil {
+				fmt.Println(err)
+			}
+
+			activeSessions[roomID] = session
 		default:
 			fmt.Println("def")
 		}
 	}
+}
+
+func (s *GameSession) addUser(userID string) {
+	s.Players = append(s.Players, userID)
 }
 
 func receiveMess(c chan Message, con net.Conn) {
@@ -90,7 +125,9 @@ func receiveMess(c chan Message, con net.Conn) {
 	var mess Message
 
 	err = json.Unmarshal(data, &mess)
-	fmt.Println(err)
+	if err != nil {
+		fmt.Println(err)
+	}
 
 	fmt.Println(mess)
 
