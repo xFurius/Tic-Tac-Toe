@@ -104,6 +104,39 @@ func handleConnection(conn net.Conn) {
 			}
 
 			activeSessions[roomID] = session
+
+		case "joinRoom":
+			fmt.Println("join room")
+			session, ok := activeSessions[t.Content]
+			if !ok {
+				//session does not exist
+				//
+			}
+
+			//need to make so 3rd player cant join
+			session.Players = append(session.Players, t.Sender)
+
+			message := Message{"server", "gameJoin", users[t.Sender].username}
+			data, err := json.Marshal(message)
+			if err != nil {
+				fmt.Println(err)
+			}
+			_, err = users[session.Host].conn.Write(data)
+			if err != nil {
+				fmt.Println(err)
+			}
+
+			session.Players[0] = users[session.Players[0]].username
+			session.Players[1] = users[session.Players[1]].username
+			data, err = json.Marshal(session)
+			if err != nil {
+				fmt.Println(err)
+			}
+			_, err = users[t.Sender].conn.Write(data)
+			if err != nil {
+				fmt.Println(err)
+			}
+
 		default:
 			fmt.Println("def")
 		}
