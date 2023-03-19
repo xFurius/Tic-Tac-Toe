@@ -17,6 +17,13 @@ var myApp fyne.App
 var userID string
 var username string
 var connection net.Conn
+var session Session
+
+type Session struct {
+	RoomID  string
+	Players []string
+	Host    string
+}
 
 type Message struct {
 	Sender  string
@@ -64,11 +71,36 @@ func initializeGameWindow() {
 	window.Resize(fyne.NewSize(600, 600))
 
 	btnJoin := widget.NewButton("Join Room", func() {
+		temp := myApp.NewWindow("Join room")
+		temp.Resize(fyne.NewSize(600, 600))
 
+		roomID := widget.NewEntry()
+		content := container.NewCenter(container.NewVBox(roomID, widget.NewButton("Join", func() {
+			if joinRoom(roomID.Text) {
+				temp.Close()
+				label1 := widget.NewLabel(session.RoomID)
+				label2 := widget.NewLabel(session.Players[0])
+				label3 := widget.NewLabel(session.Players[1])
+				content := container.NewVBox(label1, label2, label3)
+				window.SetContent(container.NewCenter(content))
+				// messageChan := make(chan Message)
+				// go receiveMess(messageChan)
+				// go gameStatusUpdates(messageChan, content)
+			}
+		})))
+		temp.SetContent(content)
+
+		temp.Show()
 	})
 	btnCreate := widget.NewButton("Create Room", func() {
 		if createGameRoom() {
-			window.SetContent(widget.NewButton("GAME SESSION CREATED", nil))
+			label1 := widget.NewLabel(session.RoomID)
+			label2 := widget.NewLabel(username)
+			content := container.NewVBox(label1, label2)
+			window.SetContent(container.NewCenter(content))
+			messageChan := make(chan Message)
+			go receiveMess(messageChan)
+			go gameStatusUpdates(messageChan, content)
 		}
 	})
 
@@ -78,9 +110,73 @@ func initializeGameWindow() {
 	window.Show()
 }
 
-func createGameRoom() bool {
-	//send request to server
+func gameStatusUpdates(c chan Message, container *fyne.Container) {
+	//listen for game changes
+	//user leaves
+	//game progress
+	t := <-c
+	switch t.Request {
+	case "gameJoin":
+		fmt.Println("game join")
+		container.Add(widget.NewLabel(t.Content))
+		container.Refresh()
+	default:
+		fmt.Println("def")
+	}
+}
 
+func receiveMess(c chan Message) {
+	data := make([]byte, 1024)
+	n, err := connection.Read(data)
+	if err != nil {
+		fmt.Println(err)
+	}
+	data = data[:n]
+
+	var mess Message
+
+	err = json.Unmarshal(data, &mess)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	fmt.Println(mess)
+
+	c <- mess
+}
+
+func joinRoom(roomID string) bool {
+	message := Message{userID, "joinRoom", roomID}
+
+	data, err := json.Marshal(message)
+	if err != nil {
+		fmt.Println(err)
+		return false
+	}
+	_, err = connection.Write(data)
+	if err != nil {
+		fmt.Println(err)
+		return false
+	}
+
+	data = make([]byte, 1024)
+	n, err := connection.Read(data)
+	if err != nil {
+		fmt.Println(err)
+		return false
+	}
+	data = data[:n]
+
+	err = json.Unmarshal(data, &session)
+	if err != nil {
+		fmt.Println(err)
+		return false
+	}
+
+	return true
+}
+
+func createGameRoom() bool {
 	fmt.Println(connection)
 
 	message := Message{userID, "createRoom", ""}
@@ -105,12 +201,6 @@ func createGameRoom() bool {
 		return false
 	}
 	data = data[:n]
-
-	session := struct {
-		RoomID  string
-		Players []string
-		Host    string
-	}{}
 
 	err = json.Unmarshal(data, &session)
 	if err != nil {
