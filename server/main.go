@@ -19,18 +19,59 @@ type Message struct {
 	Content string
 }
 
+func (m Message) send(conn net.Conn) {
+	data, err := json.Marshal(m)
+	if err != nil {
+		fmt.Println(err)
+	}
+	_, err = conn.Write(data)
+	if err != nil {
+		fmt.Println(err)
+	}
+}
+
 type GameSession struct {
 	RoomID  string
 	Players []string
 	Host    string
 }
 
+func (s *GameSession) addUser(userID string) bool {
+	//TODO: prevent having more than 2 players in a session
+	s.Players = append(s.Players, userID)
+	return true
+}
+
+func (s *GameSession) deleteUser(userID string) bool {
+	fmt.Println(s.Players)
+	fmt.Println(userID, " wants to leave")
+	for i, v := range s.Players {
+		if v == userID {
+			if i == 0 {
+				s.Players = s.Players[i:]
+				fmt.Println("i is 0 ", s.Players)
+
+				return true
+			} else {
+				s.Players = s.Players[:i]
+				fmt.Println("i is 1 ", s.Players)
+
+				return true
+			}
+		}
+	}
+
+	fmt.Println("outside loop ", s.Players)
+
+	return false
+}
+
 var users map[string]user
-var activeSessions map[string]GameSession
+var activeSessions map[string]*GameSession
 
 func main() {
 	users = make(map[string]user)
-	activeSessions = make(map[string]GameSession)
+	activeSessions = make(map[string]*GameSession)
 	listener, err := net.Listen("tcp", ":8080")
 	if err != nil {
 		fmt.Println(err)
@@ -103,7 +144,9 @@ func handleConnection(conn net.Conn) {
 				fmt.Println(err)
 			}
 
-			activeSessions[roomID] = session
+			activeSessions[roomID] = &session
+
+			fmt.Println("CURRENT PLAYERS", session.Players)
 
 		case "joinRoom":
 			fmt.Println("join room")
@@ -113,22 +156,21 @@ func handleConnection(conn net.Conn) {
 				//
 			}
 
-			//need to make so 3rd player cant join
-			session.Players = append(session.Players, t.Sender)
+			fmt.Println("CURRENT PLAYERS", session.Players)
+
+			session.addUser(t.Sender) //
+
+			fmt.Println("CURRENT PLAYERS AFTER  JOIN", session.Players)
 
 			message := Message{"server", "gameJoin", users[t.Sender].username}
-			data, err := json.Marshal(message)
-			if err != nil {
-				fmt.Println(err)
-			}
-			_, err = users[session.Host].conn.Write(data)
-			if err != nil {
-				fmt.Println(err)
-			}
+			message.send(users[session.Host].conn)
 
-			session.Players[0] = users[session.Players[0]].username
-			session.Players[1] = users[session.Players[1]].username
-			data, err = json.Marshal(session)
+			temp := GameSession{
+				session.RoomID,
+				[]string{users[session.Players[0]].username, users[session.Players[1]].username},
+				session.Host,
+			}
+			data, err := json.Marshal(temp)
 			if err != nil {
 				fmt.Println(err)
 			}
@@ -137,14 +179,50 @@ func handleConnection(conn net.Conn) {
 				fmt.Println(err)
 			}
 
+			fmt.Println(session.Players)
+		case "leave":
+			fmt.Println("leave")
+
+			session, ok := activeSessions[t.Content]
+			if !ok {
+				//session does not exist
+				//
+			}
+
+			fmt.Println("CURRENT PLAYERS: ", session.Players)
+
+			if session.deleteUser(t.Sender) {
+				if t.Sender == session.Host {
+					fmt.Println("host leave")
+					message := Message{"server", "leave", "success"}
+					message.send(users[t.Sender].conn)
+
+					fmt.Println("CURRENT PLAYERS: ", session.Players, ", HOST: ", session.Host)
+
+					//disband session
+
+				} else {
+					fmt.Println("non host leave")
+
+					fmt.Println("CURRENT PLAYERS: ", session.Players, ", HOST: ", session.Host)
+
+					message := Message{"server", "leave", "success"}
+					message.send(users[t.Sender].conn)
+
+					message = Message{"server", "sessionLeave", users[t.Sender].username}
+					message.send(users[session.Host].conn)
+				}
+			} else {
+
+				fmt.Println("CURRENT PLAYERS: ", session.Players, ", HOST: ", session.Host)
+
+				message := Message{"server", "leave", "fail"}
+				message.send(users[t.Sender].conn)
+			}
 		default:
 			fmt.Println("def")
 		}
 	}
-}
-
-func (s *GameSession) addUser(userID string) {
-	s.Players = append(s.Players, userID)
 }
 
 func receiveMess(c chan Message, con net.Conn) {
