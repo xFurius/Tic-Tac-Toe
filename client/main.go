@@ -17,6 +17,9 @@ var userID string
 var username string
 var connection net.Conn
 var session Session
+var contentMain *fyne.Container
+var content1 *fyne.Container
+var content2 *fyne.Container
 
 type Session struct {
 	RoomID  string
@@ -35,47 +38,46 @@ func connectToServer() bool {
 
 	data, err := json.Marshal(message)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println("func connect", err)
 		return false
 	}
 
 	connection, err = net.Dial("tcp", ":8080")
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println("func connect", err)
 		return false
 	}
 	// defer connection.Close() //need opened connection for later actions
 
 	_, err = connection.Write(data)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println("func connect", err)
 		return false
 	}
 
 	data = make([]byte, 6)
 	_, err = connection.Read(data)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println("func connect", err)
 	}
 
 	userID = string(data)
 
-	fmt.Println(userID)
-	fmt.Println(username)
+	fmt.Println("func connect", userID)
+	fmt.Println("func connect", username)
 	return true
 }
 
 func initializeGameWindow() {
-	var contentMain *fyne.Container
 	window := myApp.NewWindow("Tic-Tac-Toe")
 	window.Resize(fyne.NewSize(600, 600))
 	roomID := widget.NewEntry()
 
 	btnJoin := widget.NewButton("Join Room", func() {
 		go func() {
-			fmt.Println("num of goroutines: ", runtime.NumGoroutine())
-
+			fmt.Println("num of goroutines: func: btnJoin", runtime.NumGoroutine())
 			if joinRoom(roomID.Text) {
+				messageChan := make(chan Message)
 				label1 := widget.NewLabel(session.RoomID)
 				label2 := widget.NewLabel(session.Players[0])
 				label3 := widget.NewLabel(session.Players[1])
@@ -83,102 +85,61 @@ func initializeGameWindow() {
 					go func() {
 						if leaveSession() {
 							window.SetContent(contentMain)
-							fmt.Println("num of goroutines: ", runtime.NumGoroutine())
-							return
+							fmt.Println("num of goroutines: func: in leavesession if", runtime.NumGoroutine())
+							runtime.Goexit()
 						}
 					}()
-					fmt.Println("num of goroutines: ", runtime.NumGoroutine())
+					fmt.Println("num of goroutines: func: after leavesession", runtime.NumGoroutine())
 				})
-				// content := container.NewVBox(leaveBtn, label1, label2, label3)
-				// window.SetContent(container.NewCenter(content))
 				iconRes, err := fyne.LoadResourceFromPath("./assets/circle.png")
 				if err != nil {
-					fmt.Println(err)
+					fmt.Println("func bntJoin", err)
 				}
-				content1 := container.NewVBox(container.NewCenter(container.NewHBox(label1, widget.NewIcon(iconRes), label2, widget.NewIcon(iconRes), label3)), container.NewCenter(container.NewHBox(leaveBtn)))
-				content2 := container.NewAdaptiveGrid(3, widget.NewButton("X", nil), widget.NewButton("X", nil), widget.NewButton("X", nil), widget.NewButton("X", nil), widget.NewButton("X", nil), widget.NewButton("X", nil), widget.NewButton("X", nil), widget.NewButton("X", nil), widget.NewButton("X", nil))
+				content1 = container.NewVBox(container.NewCenter(container.NewHBox(label1, widget.NewIcon(iconRes), label2, widget.NewIcon(iconRes), label3)), container.NewCenter(container.NewHBox(leaveBtn)))
+				content2 = container.NewAdaptiveGrid(3, widget.NewButton("X", nil), widget.NewButton("X", nil), widget.NewButton("X", nil), widget.NewButton("X", nil), widget.NewButton("X", nil), widget.NewButton("X", nil), widget.NewButton("X", nil), widget.NewButton("X", nil), widget.NewButton("X", nil))
 				window.SetContent(container.NewBorder(content1, nil, nil, nil, content2))
 
-				messageChanUser := make(chan Message)
 				for {
-					go receiveMess(messageChanUser)
+					go receiveMess(messageChan)
 
-					t := <-messageChanUser
-					fmt.Println(t)
-					switch t.Request {
-					case "gameJoin":
-						fmt.Println("game join")
-						label3.SetText(t.Content)
-						content1.Refresh()
-					case "sessionLeave":
-						fmt.Println("session Leave")
-						label3.SetText("")
-						content1.Refresh()
-						return
-					case "sessionDisbanded":
-						fmt.Println("sessionDisband")
-					case "leave":
-						fmt.Println("leave ", t.Content)
-						if t.Content == "success" {
-							fmt.Println("success")
-							window.SetContent(contentMain)
-						}
-						return
-					default:
-						fmt.Println("def")
-					}
-
+					gameStatusUpdates(messageChan, label3, window)
 				}
 			}
+
 		}()
 	})
 	btnCreate := widget.NewButton("Create Room", func() {
 		go func() {
 			if createGameRoom() {
+				messageChan := make(chan Message)
 				label1 := widget.NewLabel(session.RoomID)
 				label2 := widget.NewLabel(username)
 				label3 := widget.NewLabel("")
 				btnCopy := widget.NewButton("Copy roomID", func() {
 					fyne.Clipboard.SetContent(window.Clipboard(), session.RoomID)
 				})
-				leaveBtn := widget.NewButton("Quit session", func() {
+				leaveBtn := widget.NewButton("Quit session", func() { //
 					go func() {
 						if leaveSession() {
 							window.SetContent(contentMain)
-							return
+							fmt.Println("num of goroutines: func: in leavesession if", runtime.NumGoroutine())
+							runtime.Goexit()
 						}
 					}()
+					fmt.Println("num of goroutines: func: after leavesession", runtime.NumGoroutine())
 				})
 				iconRes, err := fyne.LoadResourceFromPath("./assets/circle.png")
 				if err != nil {
-					fmt.Println(err)
+					fmt.Println("func btnCreate", err)
 				}
-				content1 := container.NewVBox(container.NewCenter(container.NewHBox(label1, widget.NewIcon(iconRes), label2, widget.NewIcon(iconRes), label3)), container.NewCenter(container.NewHBox(leaveBtn, btnCopy)))
-				content2 := container.NewAdaptiveGrid(3, widget.NewButton("X", nil), widget.NewButton("X", nil), widget.NewButton("X", nil), widget.NewButton("X", nil), widget.NewButton("X", nil), widget.NewButton("X", nil), widget.NewButton("X", nil), widget.NewButton("X", nil), widget.NewButton("X", nil))
+				content1 = container.NewVBox(container.NewCenter(container.NewHBox(label1, widget.NewIcon(iconRes), label2, widget.NewIcon(iconRes), label3)), container.NewCenter(container.NewHBox(leaveBtn, btnCopy)))
+				content2 = container.NewAdaptiveGrid(3, widget.NewButton("X", nil), widget.NewButton("X", nil), widget.NewButton("X", nil), widget.NewButton("X", nil), widget.NewButton("X", nil), widget.NewButton("X", nil), widget.NewButton("X", nil), widget.NewButton("X", nil), widget.NewButton("X", nil))
 				window.SetContent(container.NewBorder(content1, nil, nil, nil, content2))
 
-				messageChanHost := make(chan Message)
-				for { //
-					go receiveMess(messageChanHost)
+				for {
+					go receiveMess(messageChan)
 
-					t := <-messageChanHost
-					fmt.Println(t)
-					switch t.Request {
-					case "gameJoin":
-						fmt.Println("game join")
-						label3.SetText(t.Content)
-						content1.Refresh()
-					case "sessionLeave":
-						fmt.Println("session Leave")
-						label3.SetText("")
-						content1.Refresh()
-						return
-					case "sessionDisbanded":
-						fmt.Println("sessionDisband")
-						return
-					default:
-						fmt.Println("def")
-					}
+					gameStatusUpdates(messageChan, label3, window)
 				}
 			}
 		}()
@@ -189,71 +150,63 @@ func initializeGameWindow() {
 
 }
 
-func leaveSession() bool { //wiado z successem musi byc w game status updates
-	fmt.Println("num of goroutines: ", runtime.NumGoroutine())
+func leaveSession() bool {
+	fmt.Println("num of goroutines: func: leavesession", runtime.NumGoroutine())
 
 	message := Message{userID, "leave", session.RoomID}
 	data, err := json.Marshal(message)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println("func leaveSession", err)
 		return false
 	}
 
 	_, err = connection.Write(data)
 	if err != nil {
-		fmt.Println(err)
-		return false
-	}
-
-	data = make([]byte, 1024)
-	n, err := connection.Read(data)
-	if err != nil {
-		fmt.Println(err)
-		return false
-	}
-	data = data[:n]
-
-	err = json.Unmarshal(data, &message)
-	if err != nil {
-		fmt.Println(err)
-		return false
-	}
-
-	if message.Content == "fail" {
+		fmt.Println("func leavesession", err)
 		return false
 	}
 
 	return true
 }
 
-func gameStatusUpdates(c chan Message, container *fyne.Container) {
-	//listen for game changes
-	//user leaves
-	//game progress
-
-	//recive message from server message := Message{server, "leave", username}  //userID -> user who left  //this will be in gameStatusUpdates
-
-	// t := <-c
-	// switch t.Request {
-	// case "gameJoin":
-	// 	fmt.Println("game join")
-	// 	container.Add(widget.NewLabel(t.Content))
-	// 	container.Refresh()
-	// case "sessionLeave":
-	// 	fmt.Println("session Leave")
-
-	// default:
-	// 	fmt.Println("def")
-	// }
+func gameStatusUpdates(c chan Message, l *widget.Label, w fyne.Window) {
+	t := <-c
+	fmt.Println("func gamestatusupdates", t)
+	switch t.Request {
+	case "gameJoin":
+		fmt.Println("game join")
+		l.SetText(t.Content)
+		content1.Refresh()
+	case "sessionLeave":
+		fmt.Println("session Leave")
+		l.SetText("")
+		content1.Refresh()
+	case "sessionDisbanded":
+		fmt.Println("sessionDisband")
+		w.SetContent(contentMain)
+		session = Session{}
+		close(c)
+		runtime.Goexit()
+	case "leave":
+		fmt.Println("leave ", t.Content)
+		if t.Content == "success" {
+			fmt.Println("success")
+			w.SetContent(contentMain)
+		}
+		close(c)
+		runtime.Goexit()
+	default:
+		fmt.Println("def gamestatusupdates")
+	}
 }
 
 func receiveMess(c chan Message) {
-	fmt.Println("num of goroutines: ", runtime.NumGoroutine())
+	fmt.Println("num of goroutines: func: receiveMess", runtime.NumGoroutine())
 
 	data := make([]byte, 1024)
 	n, err := connection.Read(data)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println("func receivemess", err)
 	}
 	data = data[:n]
 
@@ -261,11 +214,10 @@ func receiveMess(c chan Message) {
 
 	err = json.Unmarshal(data, &mess)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println("func receivemess", err)
 	}
 
-	fmt.Println(mess)
-
+	fmt.Println("func receivemess", mess)
 	c <- mess
 }
 
@@ -274,45 +226,46 @@ func joinRoom(roomID string) bool {
 
 	data, err := json.Marshal(message)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println("func joinroom", err)
 		return false
 	}
 	_, err = connection.Write(data)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println("func joinroom", err)
 		return false
 	}
 
 	data = make([]byte, 1024)
 	n, err := connection.Read(data)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println("func joinroom", err)
 		return false
 	}
 	data = data[:n]
 
 	err = json.Unmarshal(data, &session)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println("func joinroom", err)
 		return false
 	}
 
+	fmt.Println("JOIn success")
 	return true
 }
 
 func createGameRoom() bool {
-	fmt.Println(connection)
+	fmt.Println("func creategameroom", connection)
 
 	message := Message{userID, "createRoom", ""}
 
 	data, err := json.Marshal(message)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println("func creategameroom", err)
 		return false
 	}
 	_, err = connection.Write(data)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println("func creategameroom", err)
 		return false
 	}
 
@@ -321,18 +274,18 @@ func createGameRoom() bool {
 	data = make([]byte, 1024)
 	n, err := connection.Read(data)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println("func creategameroom", err)
 		return false
 	}
 	data = data[:n]
 
 	err = json.Unmarshal(data, &session)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println("func creategameroom", err)
 		return false
 	}
 
-	fmt.Println(session)
+	fmt.Println("func creategameroom", session)
 	return true
 }
 
@@ -360,5 +313,5 @@ func main() {
 	loginWindow.Show()
 	myApp.Run()
 
-	fmt.Println("num of goroutines: ", runtime.NumGoroutine())
+	fmt.Println("num of goroutines: func: main", runtime.NumGoroutine())
 }
