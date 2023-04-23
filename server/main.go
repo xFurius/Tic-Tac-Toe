@@ -199,7 +199,12 @@ func handleConnection(conn net.Conn) {
 
 					fmt.Println("CURRENT PLAYERS: ", session.Players, ", HOST: ", session.Host)
 
-					//disband session
+					delete(activeSessions, session.RoomID)
+
+					fmt.Println("ACTIVE SESSIONS: ", activeSessions)
+
+					message = Message{"server", "sessionDisbanded", "success"}
+					message.send(users[session.Players[1]].conn) //
 
 				} else {
 					fmt.Println("non host leave")
