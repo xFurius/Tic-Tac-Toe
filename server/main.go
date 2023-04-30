@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"strings"
 
 	gonanoid "github.com/matoous/go-nanoid"
 )
@@ -17,6 +18,7 @@ type Message struct {
 	Sender  string
 	Request string
 	Content string
+	Session GameSession
 }
 
 func (m Message) send(conn net.Conn) {
@@ -34,6 +36,7 @@ type GameSession struct {
 	RoomID  string
 	Players []string
 	Host    string
+	Turn    string
 }
 
 func (s *GameSession) addUser(userID string) bool {
@@ -130,7 +133,7 @@ func handleConnection(conn net.Conn) {
 				fmt.Println(err)
 			}
 			fmt.Println(roomID)
-			session := GameSession{roomID, []string{}, t.Sender}
+			session := GameSession{roomID, []string{}, t.Sender, t.Sender}
 
 			session.addUser(t.Sender)
 
@@ -162,12 +165,13 @@ func handleConnection(conn net.Conn) {
 
 			fmt.Println("CURRENT PLAYERS AFTER  JOIN", session.Players)
 
-			message := Message{"server", "gameJoin", users[t.Sender].username}
+			message := Message{"server", "gameJoin", users[t.Sender].username, *session}
 			message.send(users[session.Host].conn)
 
 			temp := GameSession{
 				session.RoomID,
 				[]string{users[session.Players[0]].username, users[session.Players[1]].username},
+				session.Host,
 				session.Host,
 			}
 			data, err := json.Marshal(temp)
@@ -175,6 +179,19 @@ func handleConnection(conn net.Conn) {
 				fmt.Println(err)
 			}
 			_, err = users[t.Sender].conn.Write(data)
+			if err != nil {
+				fmt.Println(err)
+			}
+
+			message = Message{"server", "sessionUpdate", "", *session}
+			message.send(users[session.Host].conn)
+
+			data, err = json.Marshal(session)
+			if err != nil {
+				fmt.Println(err)
+			}
+
+			_, err = users[session.Host].conn.Write(data)
 			if err != nil {
 				fmt.Println(err)
 			}
@@ -194,7 +211,7 @@ func handleConnection(conn net.Conn) {
 			if session.deleteUser(t.Sender) {
 				if t.Sender == session.Host {
 					fmt.Println("host leave")
-					message := Message{"server", "leave", "success"}
+					message := Message{"server", "leave", "success", *session}
 					message.send(users[t.Sender].conn)
 
 					fmt.Println("CURRENT PLAYERS: ", session.Players, ", HOST: ", session.Host)
@@ -203,7 +220,7 @@ func handleConnection(conn net.Conn) {
 
 					fmt.Println("ACTIVE SESSIONS: ", activeSessions)
 
-					message = Message{"server", "sessionDisbanded", "success"}
+					message = Message{"server", "sessionDisbanded", "success", *session}
 					message.send(users[session.Players[1]].conn) //
 
 				} else {
@@ -211,19 +228,45 @@ func handleConnection(conn net.Conn) {
 
 					fmt.Println("CURRENT PLAYERS: ", session.Players, ", HOST: ", session.Host)
 
-					message := Message{"server", "leave", "success"}
+					message := Message{"server", "leave", "success", *session}
 					message.send(users[t.Sender].conn)
 
-					message = Message{"server", "sessionLeave", users[t.Sender].username}
+					message = Message{"server", "sessionLeave", users[t.Sender].username, *session}
 					message.send(users[session.Host].conn)
 				}
 			} else {
 
 				fmt.Println("CURRENT PLAYERS: ", session.Players, ", HOST: ", session.Host)
 
-				message := Message{"server", "leave", "fail"}
+				message := Message{"server", "leave", "fail", *session}
 				message.send(users[t.Sender].conn)
 			}
+		case "dc":
+			fmt.Println(users)
+			users[t.Sender].conn.Close()
+			delete(users, t.Sender)
+			fmt.Println(users)
+			return
+		case "statuschange":
+			content := strings.Split(t.Content, "|")
+			session, ok := activeSessions[content[0]]
+			if !ok {
+				//doesnt exists
+			}
+
+			if t.Sender == session.Turn {
+				if session.Turn == session.Players[0] {
+					session.Turn = session.Players[1]
+				} else {
+					session.Turn = session.Players[0]
+				}
+				message := Message{t.Sender, t.Request, content[1], *session}
+
+				message.send(users[session.Players[1]].conn)
+
+				message.send(users[session.Players[0]].conn)
+			}
+
 		default:
 			fmt.Println("def")
 		}
