@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net"
 	"runtime"
+	"strconv"
+	"strings"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
@@ -20,21 +22,24 @@ var session Session
 var contentMain *fyne.Container
 var content1 *fyne.Container
 var content2 *fyne.Container
+var btns [][]*widget.Button
 
 type Session struct {
 	RoomID  string
 	Players []string //
 	Host    string
+	Turn    string
 }
 
 type Message struct {
 	Sender  string
 	Request string
 	Content string
+	Session Session
 }
 
 func connectToServer() bool {
-	message := Message{userID, "register", username}
+	message := Message{userID, "register", username, session}
 
 	data, err := json.Marshal(message)
 	if err != nil {
@@ -68,6 +73,29 @@ func connectToServer() bool {
 	return true
 }
 
+func gameBtnTapped(i, j int) {
+	if userID == session.Turn {
+		if btns[i][j].Text == "" {
+			btns[i][j].SetText("X")
+
+			ij := strconv.Itoa(i) + "," + strconv.Itoa(j)
+			message := Message{userID, "statuschange", session.RoomID + "|" + ij, session}
+
+			data, err := json.Marshal(message)
+			if err != nil {
+				fmt.Println("func gameBtnTapped", err)
+			}
+
+			_, err = connection.Write(data)
+			if err != nil {
+				fmt.Println("func gameBtnTapped", err)
+			}
+
+			fmt.Println(session.Players)
+		}
+	}
+}
+
 func initializeGameWindow() {
 	window := myApp.NewWindow("Tic-Tac-Toe")
 	window.Resize(fyne.NewSize(600, 600))
@@ -96,7 +124,18 @@ func initializeGameWindow() {
 					fmt.Println("func bntJoin", err)
 				}
 				content1 = container.NewVBox(container.NewCenter(container.NewHBox(label1, widget.NewIcon(iconRes), label2, widget.NewIcon(iconRes), label3)), container.NewCenter(container.NewHBox(leaveBtn)))
-				content2 = container.NewAdaptiveGrid(3, widget.NewButton("X", nil), widget.NewButton("X", nil), widget.NewButton("X", nil), widget.NewButton("X", nil), widget.NewButton("X", nil), widget.NewButton("X", nil), widget.NewButton("X", nil), widget.NewButton("X", nil), widget.NewButton("X", nil))
+				btns = [][]*widget.Button{
+					{widget.NewButton("", func() { gameBtnTapped(0, 0) }), widget.NewButton("", func() { gameBtnTapped(0, 1) }), widget.NewButton("", func() { gameBtnTapped(0, 2) })},
+					{widget.NewButton("", func() { gameBtnTapped(1, 0) }), widget.NewButton("", func() { gameBtnTapped(1, 1) }), widget.NewButton("", func() { gameBtnTapped(1, 2) })},
+					{widget.NewButton("", func() { gameBtnTapped(2, 0) }), widget.NewButton("", func() { gameBtnTapped(2, 1) }), widget.NewButton("", func() { gameBtnTapped(2, 2) })},
+				}
+
+				content2 = container.NewAdaptiveGrid(3)
+				for i := 0; i < 3; i++ {
+					for j := 0; j < 3; j++ {
+						content2.Add(btns[i][j])
+					}
+				}
 				window.SetContent(container.NewBorder(content1, nil, nil, nil, content2))
 
 				for {
@@ -133,7 +172,18 @@ func initializeGameWindow() {
 					fmt.Println("func btnCreate", err)
 				}
 				content1 = container.NewVBox(container.NewCenter(container.NewHBox(label1, widget.NewIcon(iconRes), label2, widget.NewIcon(iconRes), label3)), container.NewCenter(container.NewHBox(leaveBtn, btnCopy)))
-				content2 = container.NewAdaptiveGrid(3, widget.NewButton("X", nil), widget.NewButton("X", nil), widget.NewButton("X", nil), widget.NewButton("X", nil), widget.NewButton("X", nil), widget.NewButton("X", nil), widget.NewButton("X", nil), widget.NewButton("X", nil), widget.NewButton("X", nil))
+				btns = [][]*widget.Button{
+					{widget.NewButton("", func() { gameBtnTapped(0, 0) }), widget.NewButton("", func() { gameBtnTapped(0, 1) }), widget.NewButton("", func() { gameBtnTapped(0, 2) })},
+					{widget.NewButton("", func() { gameBtnTapped(1, 0) }), widget.NewButton("", func() { gameBtnTapped(1, 1) }), widget.NewButton("", func() { gameBtnTapped(1, 2) })},
+					{widget.NewButton("", func() { gameBtnTapped(2, 0) }), widget.NewButton("", func() { gameBtnTapped(2, 1) }), widget.NewButton("", func() { gameBtnTapped(2, 2) })},
+				}
+
+				content2 = container.NewAdaptiveGrid(3)
+				for i := 0; i < 3; i++ {
+					for j := 0; j < 3; j++ {
+						content2.Add(btns[i][j])
+					}
+				}
 				window.SetContent(container.NewBorder(content1, nil, nil, nil, content2))
 
 				for {
@@ -144,7 +194,23 @@ func initializeGameWindow() {
 			}
 		}()
 	})
-	contentMain = container.NewCenter(container.NewVBox(roomID, btnJoin, btnCreate))
+	btnExit := widget.NewButton("Exit", func() {
+		message := Message{userID, "dc", "", session}
+		data, err := json.Marshal(message)
+		if err != nil {
+			fmt.Println("func leaveSession", err)
+			return
+		}
+
+		_, err = connection.Write(data)
+		if err != nil {
+			fmt.Println("func leavesession", err)
+			return
+		}
+		connection.Close()
+		myApp.Quit()
+	})
+	contentMain = container.NewCenter(container.NewVBox(roomID, btnJoin, btnCreate, btnExit))
 	window.SetContent(contentMain)
 	window.Show()
 
@@ -153,7 +219,7 @@ func initializeGameWindow() {
 func leaveSession() bool {
 	fmt.Println("num of goroutines: func: leavesession", runtime.NumGoroutine())
 
-	message := Message{userID, "leave", session.RoomID}
+	message := Message{userID, "leave", session.RoomID, session}
 	data, err := json.Marshal(message)
 	if err != nil {
 		fmt.Println("func leaveSession", err)
@@ -176,10 +242,16 @@ func gameStatusUpdates(c chan Message, l *widget.Label, w fyne.Window) {
 	case "gameJoin":
 		fmt.Println("game join")
 		l.SetText(t.Content)
+		fmt.Println(session)
+		session = t.Session
+		fmt.Println(session)
 		content1.Refresh()
 	case "sessionLeave":
 		fmt.Println("session Leave")
 		l.SetText("")
+		fmt.Println(session)
+		session = t.Session
+		fmt.Println(session)
 		content1.Refresh()
 	case "sessionDisbanded":
 		fmt.Println("sessionDisband")
@@ -192,9 +264,22 @@ func gameStatusUpdates(c chan Message, l *widget.Label, w fyne.Window) {
 		if t.Content == "success" {
 			fmt.Println("success")
 			w.SetContent(contentMain)
+			session = Session{}
 		}
 		close(c)
 		runtime.Goexit()
+	case "statuschange":
+		fmt.Println("statuschange", t.Content)
+		fmt.Println(session)
+		session = t.Session
+		fmt.Println(session)
+		ij := strings.Split(t.Content, ",")
+		i, _ := strconv.Atoi(ij[0])
+		j, _ := strconv.Atoi(ij[1])
+		btns[i][j].SetText("X")
+
+		//+ checking here if someone won
+
 	default:
 		fmt.Println("def gamestatusupdates")
 	}
@@ -222,7 +307,7 @@ func receiveMess(c chan Message) {
 }
 
 func joinRoom(roomID string) bool {
-	message := Message{userID, "joinRoom", roomID}
+	message := Message{userID, "joinRoom", roomID, session}
 
 	data, err := json.Marshal(message)
 	if err != nil {
@@ -256,7 +341,7 @@ func joinRoom(roomID string) bool {
 func createGameRoom() bool {
 	fmt.Println("func creategameroom", connection)
 
-	message := Message{userID, "createRoom", ""}
+	message := Message{userID, "createRoom", "", session}
 
 	data, err := json.Marshal(message)
 	if err != nil {
@@ -303,7 +388,8 @@ func main() {
 				loginWindow.Close()
 				initializeGameWindow()
 			}
-		})))
+		})),
+		widget.NewFormItem("", widget.NewButton("Exit", myApp.Quit)))
 	form.Resize(fyne.NewSize(200, 200))
 	form.Move(fyne.NewPos(150, 200))
 
