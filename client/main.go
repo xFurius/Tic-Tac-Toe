@@ -23,6 +23,8 @@ var contentMain *fyne.Container
 var content1 *fyne.Container
 var content2 *fyne.Container
 var btns [][]*widget.Button
+var iconTurnClient *widget.Icon
+var iconTurnHost *widget.Icon
 
 type Session struct {
 	RoomID  string
@@ -119,11 +121,7 @@ func initializeGameWindow() {
 					}()
 					fmt.Println("num of goroutines: func: after leavesession", runtime.NumGoroutine())
 				})
-				iconRes, err := fyne.LoadResourceFromPath("./assets/circle.png")
-				if err != nil {
-					fmt.Println("func bntJoin", err)
-				}
-				content1 = container.NewVBox(container.NewCenter(container.NewHBox(label1, widget.NewIcon(iconRes), label2, widget.NewIcon(iconRes), label3)), container.NewCenter(container.NewHBox(leaveBtn)))
+				content1 = container.NewVBox(container.NewCenter(container.NewHBox(label1, iconTurnHost, label2, label3, iconTurnClient)), container.NewCenter(container.NewHBox(leaveBtn)))
 				btns = [][]*widget.Button{
 					{widget.NewButton("", func() { gameBtnTapped(0, 0) }), widget.NewButton("", func() { gameBtnTapped(0, 1) }), widget.NewButton("", func() { gameBtnTapped(0, 2) })},
 					{widget.NewButton("", func() { gameBtnTapped(1, 0) }), widget.NewButton("", func() { gameBtnTapped(1, 1) }), widget.NewButton("", func() { gameBtnTapped(1, 2) })},
@@ -142,6 +140,14 @@ func initializeGameWindow() {
 					go receiveMess(messageChan)
 
 					gameStatusUpdates(messageChan, label3, window)
+
+					if userID == session.Turn {
+						iconTurnClient.Show()
+						iconTurnHost.Hide()
+					} else {
+						iconTurnClient.Hide()
+						iconTurnHost.Show()
+					}
 				}
 			}
 
@@ -167,11 +173,7 @@ func initializeGameWindow() {
 					}()
 					fmt.Println("num of goroutines: func: after leavesession", runtime.NumGoroutine())
 				})
-				iconRes, err := fyne.LoadResourceFromPath("./assets/circle.png")
-				if err != nil {
-					fmt.Println("func btnCreate", err)
-				}
-				content1 = container.NewVBox(container.NewCenter(container.NewHBox(label1, widget.NewIcon(iconRes), label2, widget.NewIcon(iconRes), label3)), container.NewCenter(container.NewHBox(leaveBtn, btnCopy)))
+				content1 = container.NewVBox(container.NewCenter(container.NewHBox(label1, iconTurnHost, label2, label3, iconTurnClient)), container.NewCenter(container.NewHBox(leaveBtn, btnCopy)))
 				btns = [][]*widget.Button{
 					{widget.NewButton("", func() { gameBtnTapped(0, 0) }), widget.NewButton("", func() { gameBtnTapped(0, 1) }), widget.NewButton("", func() { gameBtnTapped(0, 2) })},
 					{widget.NewButton("", func() { gameBtnTapped(1, 0) }), widget.NewButton("", func() { gameBtnTapped(1, 1) }), widget.NewButton("", func() { gameBtnTapped(1, 2) })},
@@ -190,6 +192,14 @@ func initializeGameWindow() {
 					go receiveMess(messageChan)
 
 					gameStatusUpdates(messageChan, label3, window)
+
+					if userID == session.Turn {
+						iconTurnClient.Hide()
+						iconTurnHost.Show()
+					} else {
+						iconTurnClient.Show()
+						iconTurnHost.Hide()
+					}
 				}
 			}
 		}()
@@ -376,6 +386,14 @@ func createGameRoom() bool {
 
 func main() {
 	myApp = app.New()
+
+	iconRes, err := fyne.LoadResourceFromPath("./assets/circle.png")
+	if err != nil {
+		fmt.Println("func bntJoin", err)
+	}
+	iconTurnClient = widget.NewIcon(iconRes)
+	iconTurnClient.Hide()
+	iconTurnHost = widget.NewIcon(iconRes)
 
 	loginWindow := myApp.NewWindow("Tic-Tac-Toe")
 	loginWindow.Resize(fyne.NewSize(600, 600))
