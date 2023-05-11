@@ -25,6 +25,7 @@ var content2 *fyne.Container
 var btns [][]*widget.Button
 var iconTurnClient *widget.Icon
 var iconTurnHost *widget.Icon
+var playerShape string
 
 type Session struct {
 	RoomID  string
@@ -78,10 +79,10 @@ func connectToServer() bool {
 func gameBtnTapped(i, j int) {
 	if userID == session.Turn {
 		if btns[i][j].Text == "" {
-			btns[i][j].SetText("X")
+			btns[i][j].SetText(playerShape)
 
 			ij := strconv.Itoa(i) + "," + strconv.Itoa(j)
-			message := Message{userID, "statuschange", session.RoomID + "|" + ij, session}
+			message := Message{userID, "statuschange", session.RoomID + "|" + ij + "|" + playerShape, session}
 
 			data, err := json.Marshal(message)
 			if err != nil {
@@ -106,7 +107,8 @@ func initializeGameWindow() {
 	btnJoin := widget.NewButton("Join Room", func() {
 		go func() {
 			fmt.Println("num of goroutines: func: btnJoin", runtime.NumGoroutine())
-			if joinRoom(roomID.Text) {
+			if joinRoom(roomID.Text, window) {
+				playerShape = "O"
 				messageChan := make(chan Message)
 				label1 := widget.NewLabel(session.RoomID)
 				label2 := widget.NewLabel(session.Players[0])
@@ -150,12 +152,12 @@ func initializeGameWindow() {
 					}
 				}
 			}
-
 		}()
 	})
 	btnCreate := widget.NewButton("Create Room", func() {
 		go func() {
 			if createGameRoom() {
+				playerShape = "X"
 				messageChan := make(chan Message)
 				label1 := widget.NewLabel(session.RoomID)
 				label2 := widget.NewLabel(username)
@@ -283,10 +285,11 @@ func gameStatusUpdates(c chan Message, l *widget.Label, w fyne.Window) {
 		fmt.Println(session)
 		session = t.Session
 		fmt.Println(session)
-		ij := strings.Split(t.Content, ",")
+		temp := strings.Split(t.Content, "|")
+		ij := strings.Split(temp[0], ",")
 		i, _ := strconv.Atoi(ij[0])
 		j, _ := strconv.Atoi(ij[1])
-		btns[i][j].SetText("X")
+		btns[i][j].SetText(temp[1])
 
 		//+ checking here if someone won
 
@@ -316,7 +319,7 @@ func receiveMess(c chan Message) {
 	c <- mess
 }
 
-func joinRoom(roomID string) bool {
+func joinRoom(roomID string, w fyne.Window) bool {
 	message := Message{userID, "joinRoom", roomID, session}
 
 	data, err := json.Marshal(message)
@@ -341,6 +344,18 @@ func joinRoom(roomID string) bool {
 	err = json.Unmarshal(data, &session)
 	if err != nil {
 		fmt.Println("func joinroom", err)
+		return false
+	}
+
+	if session.RoomID == "" {
+		fmt.Println("session doesnt exist")
+
+		var popUp *widget.PopUp
+		content := container.NewVBox(widget.NewLabel("SESSION DOESN'T EXIST"), widget.NewButton("OK", func() {
+			popUp.Hide()
+		}))
+		popUp = widget.NewModalPopUp(content, w.Canvas())
+		popUp.Show()
 		return false
 	}
 
