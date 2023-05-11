@@ -155,8 +155,16 @@ func handleConnection(conn net.Conn) {
 			fmt.Println("join room")
 			session, ok := activeSessions[t.Content]
 			if !ok {
-				//session does not exist
-				//
+				temp := GameSession{}
+				data, err := json.Marshal(temp)
+				if err != nil {
+					fmt.Println(err)
+				}
+				_, err = users[t.Sender].conn.Write(data)
+				if err != nil {
+					fmt.Println(err)
+				}
+				break
 			}
 
 			fmt.Println("CURRENT PLAYERS", session.Players)
@@ -260,7 +268,7 @@ func handleConnection(conn net.Conn) {
 				} else {
 					session.Turn = session.Players[0]
 				}
-				message := Message{t.Sender, t.Request, content[1], *session}
+				message := Message{t.Sender, t.Request, content[1] + "|" + content[2], *session}
 
 				message.send(users[session.Players[1]].conn)
 
