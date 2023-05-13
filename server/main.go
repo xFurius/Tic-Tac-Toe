@@ -41,8 +41,11 @@ type GameSession struct {
 
 func (s *GameSession) addUser(userID string) bool {
 	//TODO: prevent having more than 2 players in a session
-	s.Players = append(s.Players, userID)
-	return true
+	if len(s.Players) < 2 {
+		s.Players = append(s.Players, userID)
+		return true
+	}
+	return false
 }
 
 func (s *GameSession) deleteUser(userID string) bool {
@@ -169,7 +172,18 @@ func handleConnection(conn net.Conn) {
 
 			fmt.Println("CURRENT PLAYERS", session.Players)
 
-			session.addUser(t.Sender) //
+			if !session.addUser(t.Sender) {
+				temp := GameSession{}
+				data, err := json.Marshal(temp)
+				if err != nil {
+					fmt.Println(err)
+				}
+				_, err = users[t.Sender].conn.Write(data)
+				if err != nil {
+					fmt.Println(err)
+				}
+				break
+			}
 
 			fmt.Println("CURRENT PLAYERS AFTER  JOIN", session.Players)
 
@@ -208,11 +222,7 @@ func handleConnection(conn net.Conn) {
 		case "leave":
 			fmt.Println("leave")
 
-			session, ok := activeSessions[t.Content]
-			if !ok {
-				//session does not exist
-				//
-			}
+			session := activeSessions[t.Content]
 
 			fmt.Println("CURRENT PLAYERS: ", session.Players)
 
@@ -257,10 +267,7 @@ func handleConnection(conn net.Conn) {
 			return
 		case "statuschange":
 			content := strings.Split(t.Content, "|")
-			session, ok := activeSessions[content[0]]
-			if !ok {
-				//doesnt exists
-			}
+			session := activeSessions[content[0]]
 
 			if t.Sender == session.Turn {
 				if session.Turn == session.Players[0] {
