@@ -29,7 +29,7 @@ var playerShape string
 
 type Session struct {
 	RoomID  string
-	Players []string //
+	Players []string
 	Host    string
 	Turn    string
 }
@@ -291,10 +291,51 @@ func gameStatusUpdates(c chan Message, l *widget.Label, w fyne.Window) {
 		j, _ := strconv.Atoi(ij[1])
 		btns[i][j].SetText(temp[1])
 
-		//+ checking here if someone won
-
+		checkHorizontal()
+		checkVertical()
+		checkDiagonal()
 	default:
 		fmt.Println("def gamestatusupdates")
+	}
+}
+
+func checkDiagonal() {
+	if (btns[0][0].Text == playerShape && btns[1][1].Text == playerShape && btns[2][2].Text == playerShape) || (btns[0][2].Text == playerShape && btns[1][1].Text == playerShape && btns[2][0].Text == playerShape) {
+		fmt.Println("won")
+	}
+}
+
+func checkVertical() {
+	c := 0
+	for i := 0; i < 3; i++ {
+		for j := 0; j < 3; j++ {
+			if btns[j][i].Text == playerShape {
+				c++
+				fmt.Println(c)
+				if c == 3 {
+					fmt.Println(playerShape, "won")
+					//return
+				}
+			}
+		}
+		c = 0
+	}
+}
+
+func checkHorizontal() {
+	c := 0
+	for i := 0; i < 3; i++ {
+		for j := 0; j < 3; j++ {
+			if btns[i][j].Text == playerShape {
+				c++
+				fmt.Println(c)
+				if c == 3 {
+					fmt.Println(playerShape, "won")
+					//return
+				}
+			}
+		}
+		c = 0
 	}
 }
 
@@ -348,10 +389,9 @@ func joinRoom(roomID string, w fyne.Window) bool {
 	}
 
 	if session.RoomID == "" {
-		fmt.Println("session doesnt exist")
-
+		fmt.Println("COULDN'T JOIN THE SESSION")
 		var popUp *widget.PopUp
-		content := container.NewVBox(widget.NewLabel("SESSION DOESN'T EXIST"), widget.NewButton("OK", func() {
+		content := container.NewVBox(widget.NewLabel("COULDN'T JOIN THE SESSION"), widget.NewButton("OK", func() {
 			popUp.Hide()
 		}))
 		popUp = widget.NewModalPopUp(content, w.Canvas())
