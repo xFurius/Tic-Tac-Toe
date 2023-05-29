@@ -4,9 +4,19 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
-	"strings"
 
 	gonanoid "github.com/matoous/go-nanoid"
+)
+
+const (
+	REGISTER     = "register"
+	CREATEROOM   = "createRoom"
+	JOINROOM     = "joinRoom"
+	LEAVESESSION = "leaveSession"
+	DISCONNECT   = "disconnect"
+	STATUS       = "status"
+	WIN          = "win"
+	REMATCH      = "rematch"
 )
 
 type user struct {
@@ -17,7 +27,8 @@ type user struct {
 type Message struct {
 	Sender  string
 	Request string
-	Content string
+	// Content []string
+	Content map[string]interface{}
 	Session GameSession
 }
 
@@ -109,7 +120,7 @@ func handleConnection(conn net.Conn) {
 
 		t := <-mess
 		switch t.Request {
-		case "register":
+		case REGISTER:
 			fmt.Println("register")
 			id, err := gonanoid.ID(6)
 			if err != nil {
@@ -117,7 +128,7 @@ func handleConnection(conn net.Conn) {
 			}
 			fmt.Println(id)
 
-			tempUser := user{conn, t.Content}
+			tempUser := user{conn, t.Content["username"].(string)}
 			fmt.Println(tempUser)
 
 			users[id] = tempUser
@@ -129,7 +140,7 @@ func handleConnection(conn net.Conn) {
 				fmt.Println(err)
 				return
 			}
-		case "createRoom":
+		case CREATEROOM:
 			fmt.Println("create room")
 			roomID, err := gonanoid.ID(6)
 			if err != nil {
@@ -154,9 +165,9 @@ func handleConnection(conn net.Conn) {
 
 			fmt.Println("CURRENT PLAYERS", session.Players)
 
-		case "joinRoom":
+		case JOINROOM:
 			fmt.Println("join room")
-			session, ok := activeSessions[t.Content]
+			session, ok := activeSessions[t.Content["roomID"].(string)]
 			if !ok {
 				temp := GameSession{}
 				data, err := json.Marshal(temp)
@@ -187,7 +198,7 @@ func handleConnection(conn net.Conn) {
 
 			fmt.Println("CURRENT PLAYERS AFTER  JOIN", session.Players)
 
-			message := Message{"server", "gameJoin", users[t.Sender].username, *session}
+			message := Message{"server", "gameJoin", map[string]interface{}{"username": users[t.Sender].username}, *session}
 			message.send(users[session.Host].conn)
 
 			temp := GameSession{
@@ -205,31 +216,31 @@ func handleConnection(conn net.Conn) {
 				fmt.Println(err)
 			}
 
-			message = Message{"server", "sessionUpdate", "", *session}
-			message.send(users[session.Host].conn)
+			// message = Message{"server", "sessionUpdate", "", *session}
+			// message.send(users[session.Host].conn)
 
-			data, err = json.Marshal(session)
-			if err != nil {
-				fmt.Println(err)
-			}
+			// data, err = json.Marshal(session)
+			// if err != nil {
+			// 	fmt.Println(err)
+			// }
 
-			_, err = users[session.Host].conn.Write(data)
-			if err != nil {
-				fmt.Println(err)
-			}
+			// _, err = users[session.Host].conn.Write(data)
+			// if err != nil {
+			// 	fmt.Println(err)
+			// }
 
 			fmt.Println(session.Players)
-		case "leave":
+		case LEAVESESSION:
 			fmt.Println("leave")
 
-			session := activeSessions[t.Content]
+			session := activeSessions[t.Content["roomID"].(string)]
 
 			fmt.Println("CURRENT PLAYERS: ", session.Players)
 
 			if session.deleteUser(t.Sender) {
 				if t.Sender == session.Host {
 					fmt.Println("host leave")
-					message := Message{"server", "leave", "success", *session}
+					message := Message{"server", "leave", map[string]interface{}{"status": "success"}, *session}
 					message.send(users[t.Sender].conn)
 
 					fmt.Println("CURRENT PLAYERS: ", session.Players, ", HOST: ", session.Host)
@@ -237,51 +248,61 @@ func handleConnection(conn net.Conn) {
 					delete(activeSessions, session.RoomID)
 
 					fmt.Println("ACTIVE SESSIONS: ", activeSessions)
-
-					message = Message{"server", "sessionDisbanded", "success", *session}
-					message.send(users[session.Players[1]].conn) //
+					if len(session.Players) > 1 {
+						message = Message{"server", "sessionDisbanded", map[string]interface{}{}, *session}
+						message.send(users[session.Players[1]].conn)
+					}
 
 				} else {
 					fmt.Println("non host leave")
 
 					fmt.Println("CURRENT PLAYERS: ", session.Players, ", HOST: ", session.Host)
 
-					message := Message{"server", "leave", "success", *session}
+					message := Message{"server", "leave", map[string]interface{}{"status": "success"}, *session}
 					message.send(users[t.Sender].conn)
 
-					message = Message{"server", "sessionLeave", users[t.Sender].username, *session}
+					message = Message{"server", "sessionLeave", map[string]interface{}{}, *session} //
 					message.send(users[session.Host].conn)
 				}
 			} else {
 
 				fmt.Println("CURRENT PLAYERS: ", session.Players, ", HOST: ", session.Host)
 
-				message := Message{"server", "leave", "fail", *session}
+				message := Message{"server", "leave", map[string]interface{}{"status": "success"}, *session}
 				message.send(users[t.Sender].conn)
 			}
-		case "dc":
+		case DISCONNECT:
 			fmt.Println(users)
 			users[t.Sender].conn.Close()
 			delete(users, t.Sender)
 			fmt.Println(users)
 			return
-		case "statuschange":
-			content := strings.Split(t.Content, "|")
-			session := activeSessions[content[0]]
+		case STATUS:
+			session := activeSessions[t.Content["roomID"].(string)]
 
-			if t.Sender == session.Turn {
-				if session.Turn == session.Players[0] {
-					session.Turn = session.Players[1]
+			_, gameEnd := t.Content["gameEnd"]
+			if gameEnd {
+				_, rematch := t.Content["rematch"]
+				if rematch {
+					// //if both players want to rematch send message to start new game
 				} else {
-					session.Turn = session.Players[0]
+					message := Message{"server", t.Request, t.Content, t.Session}
+					message.send(users[t.Session.Players[1]].conn)
+					message.send(users[t.Session.Players[0]].conn)
 				}
-				message := Message{t.Sender, t.Request, content[1] + "|" + content[2], *session}
+			} else {
+				if t.Sender == session.Turn {
+					if session.Turn == session.Players[0] {
+						session.Turn = session.Players[1]
+					} else {
+						session.Turn = session.Players[0]
+					}
+					message := Message{"server", t.Request, map[string]interface{}{"move": t.Content["move"], "player": t.Content["player"]}, *session}
 
-				message.send(users[session.Players[1]].conn)
-
-				message.send(users[session.Players[0]].conn)
+					message.send(users[session.Players[1]].conn)
+					message.send(users[session.Players[0]].conn)
+				}
 			}
-
 		default:
 			fmt.Println("def")
 		}
