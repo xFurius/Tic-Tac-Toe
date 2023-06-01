@@ -20,12 +20,12 @@ var username string
 var connection net.Conn
 var session Session
 var contentMain *fyne.Container
-var content1 *fyne.Container
-var content2 *fyne.Container
+var content *fyne.Container
 var btns [][]*widget.Button
 var iconTurnClient *widget.Icon
 var iconTurnHost *widget.Icon
 var playerShape string
+var popUp *widget.PopUp
 
 type Session struct {
 	RoomID  string
@@ -37,12 +37,27 @@ type Session struct {
 type Message struct {
 	Sender  string
 	Request string
-	Content string
+	// Content []string
+	Content map[string]interface{}
 	Session Session
 }
 
+func (m Message) send() {
+	data, err := json.Marshal(m)
+	if err != nil {
+		fmt.Println("func send", err)
+		return
+	}
+
+	_, err = connection.Write(data)
+	if err != nil {
+		fmt.Println("func send", err)
+		return
+	}
+}
+
 func connectToServer() bool {
-	message := Message{userID, "register", username, session}
+	message := Message{userID, "register", map[string]interface{}{"username": username}, session}
 
 	data, err := json.Marshal(message)
 	if err != nil {
@@ -82,17 +97,8 @@ func gameBtnTapped(i, j int) {
 			btns[i][j].SetText(playerShape)
 
 			ij := strconv.Itoa(i) + "," + strconv.Itoa(j)
-			message := Message{userID, "statuschange", session.RoomID + "|" + ij + "|" + playerShape, session}
-
-			data, err := json.Marshal(message)
-			if err != nil {
-				fmt.Println("func gameBtnTapped", err)
-			}
-
-			_, err = connection.Write(data)
-			if err != nil {
-				fmt.Println("func gameBtnTapped", err)
-			}
+			message := Message{userID, "status", map[string]interface{}{"roomID": session.RoomID, "move": ij, "player": playerShape}, session}
+			message.send()
 
 			fmt.Println(session.Players)
 		}
@@ -100,7 +106,7 @@ func gameBtnTapped(i, j int) {
 }
 
 func initializeGameWindow() {
-	window := myApp.NewWindow("Tic-Tac-Toe")
+	window := myApp.NewWindow("Tic-Tac-Toe") //
 	window.Resize(fyne.NewSize(600, 600))
 	roomID := widget.NewEntry()
 
@@ -123,25 +129,29 @@ func initializeGameWindow() {
 					}()
 					fmt.Println("num of goroutines: func: after leavesession", runtime.NumGoroutine())
 				})
-				content1 = container.NewVBox(container.NewCenter(container.NewHBox(label1, iconTurnHost, label2, label3, iconTurnClient)), container.NewCenter(container.NewHBox(leaveBtn)))
+				content = container.NewVBox(container.NewCenter(container.NewHBox(label1, iconTurnHost, label2, label3, iconTurnClient)), container.NewCenter(container.NewHBox(leaveBtn)))
 				btns = [][]*widget.Button{
 					{widget.NewButton("", func() { gameBtnTapped(0, 0) }), widget.NewButton("", func() { gameBtnTapped(0, 1) }), widget.NewButton("", func() { gameBtnTapped(0, 2) })},
 					{widget.NewButton("", func() { gameBtnTapped(1, 0) }), widget.NewButton("", func() { gameBtnTapped(1, 1) }), widget.NewButton("", func() { gameBtnTapped(1, 2) })},
 					{widget.NewButton("", func() { gameBtnTapped(2, 0) }), widget.NewButton("", func() { gameBtnTapped(2, 1) }), widget.NewButton("", func() { gameBtnTapped(2, 2) })},
 				}
 
-				content2 = container.NewAdaptiveGrid(3)
+				contentFinal := container.NewBorder(content, nil, nil, nil)
+
+				content = container.NewAdaptiveGrid(3)
 				for i := 0; i < 3; i++ {
 					for j := 0; j < 3; j++ {
-						content2.Add(btns[i][j])
+						content.Add(btns[i][j])
 					}
 				}
-				window.SetContent(container.NewBorder(content1, nil, nil, nil, content2))
+
+				contentFinal.Add(content)
+				window.SetContent(contentFinal)
 
 				for {
 					go receiveMess(messageChan)
 
-					gameStatusUpdates(messageChan, label3, window)
+					gameStatusUpdates(messageChan, window)
 
 					if userID == session.Turn {
 						iconTurnClient.Show()
@@ -175,25 +185,29 @@ func initializeGameWindow() {
 					}()
 					fmt.Println("num of goroutines: func: after leavesession", runtime.NumGoroutine())
 				})
-				content1 = container.NewVBox(container.NewCenter(container.NewHBox(label1, iconTurnHost, label2, label3, iconTurnClient)), container.NewCenter(container.NewHBox(leaveBtn, btnCopy)))
+				content = container.NewVBox(container.NewCenter(container.NewHBox(label1, iconTurnHost, label2, label3, iconTurnClient)), container.NewCenter(container.NewHBox(leaveBtn, btnCopy)))
 				btns = [][]*widget.Button{
 					{widget.NewButton("", func() { gameBtnTapped(0, 0) }), widget.NewButton("", func() { gameBtnTapped(0, 1) }), widget.NewButton("", func() { gameBtnTapped(0, 2) })},
 					{widget.NewButton("", func() { gameBtnTapped(1, 0) }), widget.NewButton("", func() { gameBtnTapped(1, 1) }), widget.NewButton("", func() { gameBtnTapped(1, 2) })},
 					{widget.NewButton("", func() { gameBtnTapped(2, 0) }), widget.NewButton("", func() { gameBtnTapped(2, 1) }), widget.NewButton("", func() { gameBtnTapped(2, 2) })},
 				}
 
-				content2 = container.NewAdaptiveGrid(3)
+				contentFinal := container.NewBorder(content, nil, nil, nil)
+
+				content = container.NewAdaptiveGrid(3)
 				for i := 0; i < 3; i++ {
 					for j := 0; j < 3; j++ {
-						content2.Add(btns[i][j])
+						content.Add(btns[i][j])
 					}
 				}
-				window.SetContent(container.NewBorder(content1, nil, nil, nil, content2))
+				contentFinal.Add(content)
+
+				window.SetContent(contentFinal)
 
 				for {
 					go receiveMess(messageChan)
 
-					gameStatusUpdates(messageChan, label3, window)
+					gameStatusUpdates(messageChan, window)
 
 					if userID == session.Turn {
 						iconTurnClient.Hide()
@@ -207,18 +221,9 @@ func initializeGameWindow() {
 		}()
 	})
 	btnExit := widget.NewButton("Exit", func() {
-		message := Message{userID, "dc", "", session}
-		data, err := json.Marshal(message)
-		if err != nil {
-			fmt.Println("func leaveSession", err)
-			return
-		}
+		message := Message{userID, "disconnect", map[string]interface{}{}, session}
+		message.send()
 
-		_, err = connection.Write(data)
-		if err != nil {
-			fmt.Println("func leavesession", err)
-			return
-		}
 		connection.Close()
 		myApp.Quit()
 	})
@@ -231,81 +236,135 @@ func initializeGameWindow() {
 func leaveSession() bool {
 	fmt.Println("num of goroutines: func: leavesession", runtime.NumGoroutine())
 
-	message := Message{userID, "leave", session.RoomID, session}
-	data, err := json.Marshal(message)
-	if err != nil {
-		fmt.Println("func leaveSession", err)
-		return false
-	}
-
-	_, err = connection.Write(data)
-	if err != nil {
-		fmt.Println("func leavesession", err)
-		return false
-	}
+	message := Message{userID, "leaveSession", map[string]interface{}{"roomID": session.RoomID}, session}
+	message.send()
 
 	return true
 }
 
-func gameStatusUpdates(c chan Message, l *widget.Label, w fyne.Window) {
+func gameStatusUpdates(c chan Message, w fyne.Window) {
 	t := <-c
 	fmt.Println("func gamestatusupdates", t)
 	switch t.Request {
 	case "gameJoin":
 		fmt.Println("game join")
-		l.SetText(t.Content)
+		c := w.Content().(*fyne.Container)
+		c.Objects[0].(*fyne.Container).Objects[0].(*fyne.Container).Objects[0].(*fyne.Container).Objects[3].(*widget.Label).SetText(t.Content["username"].(string))
 		fmt.Println(session)
 		session = t.Session
 		fmt.Println(session)
-		content1.Refresh()
+		w.Content().Refresh()
 	case "sessionLeave":
 		fmt.Println("session Leave")
-		l.SetText("")
+		c := w.Content().(*fyne.Container)
+		c.Objects[0].(*fyne.Container).Objects[0].(*fyne.Container).Objects[0].(*fyne.Container).Objects[3].(*widget.Label).SetText("")
 		fmt.Println(session)
 		session = t.Session
 		fmt.Println(session)
-		content1.Refresh()
+		popUp.Hide()
+		w.Content().Refresh()
 	case "sessionDisbanded":
 		fmt.Println("sessionDisband")
 		w.SetContent(contentMain)
 		session = Session{}
+		popUp.Hide()
 		close(c)
 		runtime.Goexit()
 	case "leave":
 		fmt.Println("leave ", t.Content)
-		if t.Content == "success" {
+		if t.Content["status"].(string) == "success" {
 			fmt.Println("success")
 			w.SetContent(contentMain)
 			session = Session{}
 		}
 		close(c)
 		runtime.Goexit()
-	case "statuschange":
-		fmt.Println("statuschange", t.Content)
+	case "status":
+		fmt.Println("status", t.Content)
 		fmt.Println(session)
 		session = t.Session
 		fmt.Println(session)
-		temp := strings.Split(t.Content, "|")
-		ij := strings.Split(temp[0], ",")
-		i, _ := strconv.Atoi(ij[0])
-		j, _ := strconv.Atoi(ij[1])
-		btns[i][j].SetText(temp[1])
 
-		checkHorizontal()
-		checkVertical()
-		checkDiagonal()
+		_, gameEnd := t.Content["gameEnd"]
+		if gameEnd {
+			_, draw := t.Content["draw"]
+			if draw {
+				displayEndGamePopUp("draw", w)
+			} else {
+				displayEndGamePopUp("winner: "+t.Content["winner"].(string), w)
+			}
+		}
+
+		_, move := t.Content["move"]
+		if move {
+			ij := strings.Split(t.Content["move"].(string), ",")
+			i, _ := strconv.Atoi(ij[0])
+			j, _ := strconv.Atoi(ij[1])
+			btns[i][j].SetText(t.Content["player"].(string))
+
+			if checkHorizontal() || checkVertical() || checkDiagonal() {
+				message := Message{userID, "status", map[string]interface{}{"roomID": session.RoomID, "gameEnd": true, "winner": playerShape}, session}
+				message.send()
+			}
+
+			if checkEmpty() {
+				message := Message{userID, "status", map[string]interface{}{"roomID": session.RoomID, "gameEnd": true, "draw": ""}, session}
+				message.send()
+			}
+		}
+	case "rematch":
+		fmt.Println("starting a new game")
+		//initialize game reset
+
 	default:
 		fmt.Println("def gamestatusupdates")
 	}
 }
 
-func checkDiagonal() {
-	if (btns[0][0].Text == playerShape && btns[1][1].Text == playerShape && btns[2][2].Text == playerShape) || (btns[0][2].Text == playerShape && btns[1][1].Text == playerShape && btns[2][0].Text == playerShape) {
-		fmt.Println("won")
-	}
+func displayEndGamePopUp(text string, w fyne.Window) {
+	content = container.NewVBox(widget.NewLabel(text),
+		widget.NewButton("REMATCH", func() {
+			//change popup button text to waiting for other player
+			message := Message{userID, "status", map[string]interface{}{"roomID": session.RoomID, "gameEnd": true, "rematch": true}, session} //
+			message.send()
+			content.Objects[1].(*widget.Button).SetText("WAITING FOR OTHER PLAYER")
+		}),
+		widget.NewButton("EXIT SESSION", func() {
+			popUp.Hide()
+			go func() {
+				if leaveSession() {
+					w.SetContent(contentMain)
+					fmt.Println("num of goroutines: func: in leavesession if", runtime.NumGoroutine())
+					runtime.Goexit()
+				}
+			}()
+		}))
+	popUp = widget.NewModalPopUp(content, w.Canvas())
+	popUp.Show()
 }
 
-func checkVertical() {
+func checkEmpty() bool {
+	for i := 0; i < 3; i++ {
+		for j := 0; j < 3; j++ {
+			if btns[j][i].Text == "" {
+				fmt.Println("emppty")
+				return false
+			}
+		}
+	}
+	fmt.Println("no emppty left")
+	return true
+}
+
+func checkDiagonal() bool {
+	if (btns[0][0].Text == playerShape && btns[1][1].Text == playerShape && btns[2][2].Text == playerShape) || (btns[0][2].Text == playerShape && btns[1][1].Text == playerShape && btns[2][0].Text == playerShape) {
+		fmt.Println("won")
+		return true
+	}
+	return false
+}
+
+func checkVertical() bool {
 	c := 0
 	for i := 0; i < 3; i++ {
 		for j := 0; j < 3; j++ {
@@ -314,15 +373,16 @@ func checkVertical() {
 				fmt.Println(c)
 				if c == 3 {
 					fmt.Println(playerShape, "won")
-					//return
+					return true
 				}
 			}
 		}
 		c = 0
 	}
+	return false
 }
 
-func checkHorizontal() {
+func checkHorizontal() bool {
 	c := 0
 	for i := 0; i < 3; i++ {
 		for j := 0; j < 3; j++ {
@@ -331,12 +391,13 @@ func checkHorizontal() {
 				fmt.Println(c)
 				if c == 3 {
 					fmt.Println(playerShape, "won")
-					//return
+					return true
 				}
 			}
 		}
 		c = 0
 	}
+	return false
 }
 
 func receiveMess(c chan Message) {
@@ -361,20 +422,10 @@ func receiveMess(c chan Message) {
 }
 
 func joinRoom(roomID string, w fyne.Window) bool {
-	message := Message{userID, "joinRoom", roomID, session}
+	message := Message{userID, "joinRoom", map[string]interface{}{"roomID": roomID}, session}
+	message.send()
 
-	data, err := json.Marshal(message)
-	if err != nil {
-		fmt.Println("func joinroom", err)
-		return false
-	}
-	_, err = connection.Write(data)
-	if err != nil {
-		fmt.Println("func joinroom", err)
-		return false
-	}
-
-	data = make([]byte, 1024)
+	data := make([]byte, 1024)
 	n, err := connection.Read(data)
 	if err != nil {
 		fmt.Println("func joinroom", err)
@@ -390,8 +441,7 @@ func joinRoom(roomID string, w fyne.Window) bool {
 
 	if session.RoomID == "" {
 		fmt.Println("COULDN'T JOIN THE SESSION")
-		var popUp *widget.PopUp
-		content := container.NewVBox(widget.NewLabel("COULDN'T JOIN THE SESSION"), widget.NewButton("OK", func() {
+		content = container.NewVBox(widget.NewLabel("COULDN'T JOIN THE SESSION"), widget.NewButton("OK", func() { //
 			popUp.Hide()
 		}))
 		popUp = widget.NewModalPopUp(content, w.Canvas())
@@ -406,22 +456,12 @@ func joinRoom(roomID string, w fyne.Window) bool {
 func createGameRoom() bool {
 	fmt.Println("func creategameroom", connection)
 
-	message := Message{userID, "createRoom", "", session}
-
-	data, err := json.Marshal(message)
-	if err != nil {
-		fmt.Println("func creategameroom", err)
-		return false
-	}
-	_, err = connection.Write(data)
-	if err != nil {
-		fmt.Println("func creategameroom", err)
-		return false
-	}
+	message := Message{userID, "createRoom", map[string]interface{}{}, session}
+	message.send()
 
 	//server sents back roomID, current players
 
-	data = make([]byte, 1024)
+	data := make([]byte, 1024)
 	n, err := connection.Read(data)
 	if err != nil {
 		fmt.Println("func creategameroom", err)
