@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net"
 
 	gonanoid "github.com/matoous/go-nanoid"
@@ -284,11 +285,17 @@ func handleConnection(conn net.Conn) {
 			if gameEnd {
 				_, rematch := t.Content["rematch"]
 				if rematch {
-					// //if both players want to rematch send message to start new game
+					log.Println(t.Sender, " wants to rematch", ", session : ", session)
+					message := Message{"server", "rematch", t.Content, t.Session}
+					if t.Sender == session.Players[0] {
+						message.send(users[session.Players[1]].conn)
+					} else {
+						message.send(users[session.Players[0]].conn)
+					}
 				} else {
 					message := Message{"server", t.Request, t.Content, t.Session}
-					message.send(users[t.Session.Players[1]].conn)
-					message.send(users[t.Session.Players[0]].conn)
+					message.send(users[session.Players[1]].conn)
+					message.send(users[session.Players[0]].conn)
 				}
 			} else {
 				if t.Sender == session.Turn {
@@ -303,6 +310,11 @@ func handleConnection(conn net.Conn) {
 					message.send(users[session.Players[0]].conn)
 				}
 			}
+		case "newGame":
+			log.Println("start a new game")
+			message := Message{"server", t.Request, t.Content, t.Session}
+			message.send(users[t.Session.Players[1]].conn)
+			message.send(users[t.Session.Players[0]].conn)
 		default:
 			fmt.Println("def")
 		}

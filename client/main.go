@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net"
 	"runtime"
 	"strconv"
@@ -313,9 +314,38 @@ func gameStatusUpdates(c chan Message, w fyne.Window) {
 			}
 		}
 	case "rematch":
-		fmt.Println("starting a new game")
-		//initialize game reset
+		fmt.Println("rematch")
+		popUp.Hide()
+		var rematchPopUp *widget.PopUp
+		popUpContent := container.NewVBox(widget.NewLabel("Rematch?"), widget.NewButton("YES", func() {
+			message := Message{userID, "newGame", map[string]interface{}{}, session}
+			message.send()
+			rematchPopUp.Hide()
+		}),
+			widget.NewButton("EXIT", func() {
+				rematchPopUp.Hide()
+				go func() {
+					if leaveSession() {
+						w.SetContent(contentMain)
+						fmt.Println("num of goroutines: func: in leavesession if", runtime.NumGoroutine())
+						runtime.Goexit()
+					}
+				}()
+			}))
+		rematchPopUp = widget.NewModalPopUp(popUpContent, w.Canvas())
+		rematchPopUp.Show()
+	case "newGame":
+		log.Println("newGame")
+		if !popUp.Hidden {
+			popUp.Hide()
+		}
+		btns := w.Content().(*fyne.Container).Objects[1].(*fyne.Container).Objects
+		for _, btn := range btns {
+			btn.(*widget.Button).SetText("")
+		}
+		log.Println(btns)
 
+		//TODO: change turn to host
 	default:
 		fmt.Println("def gamestatusupdates")
 	}
@@ -324,7 +354,6 @@ func gameStatusUpdates(c chan Message, w fyne.Window) {
 func displayEndGamePopUp(text string, w fyne.Window) {
 	content = container.NewVBox(widget.NewLabel(text),
 		widget.NewButton("REMATCH", func() {
-			//change popup button text to waiting for other player
 			message := Message{userID, "status", map[string]interface{}{"roomID": session.RoomID, "gameEnd": true, "rematch": true}, session} //
 			message.send()
 			content.Objects[1].(*widget.Button).SetText("WAITING FOR OTHER PLAYER")
