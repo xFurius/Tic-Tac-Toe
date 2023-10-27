@@ -28,7 +28,6 @@ type user struct {
 type Message struct {
 	Sender  string
 	Request string
-	// Content []string
 	Content map[string]interface{}
 	Session GameSession
 }
@@ -52,7 +51,6 @@ type GameSession struct {
 }
 
 func (s *GameSession) addUser(userID string) bool {
-	//TODO: prevent having more than 2 players in a session
 	if len(s.Players) < 2 {
 		s.Players = append(s.Players, userID)
 		return true
@@ -111,8 +109,6 @@ func main() {
 }
 
 func handleConnection(conn net.Conn) {
-	// defer conn.Close() //need opened connection for later actions
-
 	mess := make(chan Message)
 	defer close(mess)
 
@@ -216,20 +212,6 @@ func handleConnection(conn net.Conn) {
 			if err != nil {
 				fmt.Println(err)
 			}
-
-			// message = Message{"server", "sessionUpdate", "", *session}
-			// message.send(users[session.Host].conn)
-
-			// data, err = json.Marshal(session)
-			// if err != nil {
-			// 	fmt.Println(err)
-			// }
-
-			// _, err = users[session.Host].conn.Write(data)
-			// if err != nil {
-			// 	fmt.Println(err)
-			// }
-
 			fmt.Println(session.Players)
 		case LEAVESESSION:
 			fmt.Println("leave")
@@ -311,6 +293,7 @@ func handleConnection(conn net.Conn) {
 				}
 			}
 		case "newGame":
+			//check if session exists
 			log.Println("start a new game")
 			message := Message{"server", t.Request, t.Content, t.Session}
 			message.send(users[t.Session.Players[1]].conn)
