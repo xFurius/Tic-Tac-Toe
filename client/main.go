@@ -38,7 +38,6 @@ type Session struct {
 type Message struct {
 	Sender  string
 	Request string
-	// Content []string
 	Content map[string]interface{}
 	Session Session
 }
@@ -71,7 +70,6 @@ func connectToServer() bool {
 		fmt.Println("func connect", err)
 		return false
 	}
-	// defer connection.Close() //need opened connection for later actions
 
 	_, err = connection.Write(data)
 	if err != nil {
@@ -120,7 +118,7 @@ func initializeGameWindow() {
 				label1 := widget.NewLabel(session.RoomID)
 				label2 := widget.NewLabel(session.Players[0])
 				label3 := widget.NewLabel(session.Players[1])
-				leaveBtn := widget.NewButton("Quit session", func() { //
+				leaveBtn := widget.NewButton("Quit session", func() {
 					go func() {
 						if leaveSession() {
 							window.SetContent(contentMain)
@@ -176,7 +174,7 @@ func initializeGameWindow() {
 				btnCopy := widget.NewButton("Copy roomID", func() {
 					fyne.Clipboard.SetContent(window.Clipboard(), session.RoomID)
 				})
-				leaveBtn := widget.NewButton("Quit session", func() { //
+				leaveBtn := widget.NewButton("Quit session", func() {
 					go func() {
 						if leaveSession() {
 							window.SetContent(contentMain)
@@ -344,8 +342,6 @@ func gameStatusUpdates(c chan Message, w fyne.Window) {
 			btn.(*widget.Button).SetText("")
 		}
 		log.Println(btns)
-
-		//TODO: change turn to host
 	default:
 		fmt.Println("def gamestatusupdates")
 	}
@@ -487,8 +483,6 @@ func createGameRoom() bool {
 
 	message := Message{userID, "createRoom", map[string]interface{}{}, session}
 	message.send()
-
-	//server sents back roomID, current players
 
 	data := make([]byte, 1024)
 	n, err := connection.Read(data)
